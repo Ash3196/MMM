@@ -1,103 +1,21 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import os
-import requests
-import logging
-import smtplib
-from email.message import EmailMessage
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
 
-def get_client_ip(req):
-    xff = req.headers.get("X-Forwarded-For", "")
-    if xff:
-        return xff.split(",")[0].strip()
-    return req.remote_addr
-
-def geolocate_ip(ip):
-    try:
-        r = requests.get(f"http://ip-api.com/json/{ip}", params={"fields":"status,country,regionName,city,zip,lat,lon,isp,org,query"}, timeout=5)
-        j = r.json()
-        if j.get("status") == "success":
-            return {
-                "ip": j.get("query"),
-                "country": j.get("country"),
-                "region": j.get("regionName"),
-                "city": j.get("city"),
-                "zip": j.get("zip"),
-                "lat": j.get("lat"),
-                "lon": j.get("lon"),
-                "isp": j.get("isp"),
-                "org": j.get("org")
-            }
-    except Exception as e:
-        logging.exception("geo lookup failed")
-    return {"ip": ip}
-
-def send_via_smtp(to_email, subject, body):
-    email_addr = os.getenv("EMAIL_ADDRESS")
-    email_pass = os.getenv("EMAIL_PASSWORD")
-    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "465"))
-    if not email_addr or not email_pass or not to_email:
-        raise RuntimeError("SMTP configuration missing")
-    msg = EmailMessage()
-    msg["From"] = email_addr
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.set_content(body)
-    with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=10) as s:
-        s.login(email_addr, email_pass)
-        s.send_message(msg)
-
-def send_via_sendgrid(to_email, subject, body):
-    api_key = os.getenv("SENDGRID_API_KEY")
-    if not api_key or not to_email:
-        raise RuntimeError("SendGrid configuration missing")
-    payload = {
-        "personalizations": [{"to": [{"email": to_email}], "subject": subject}],
-        "from": {"email": os.getenv("EMAIL_FROM", to_email)},
-        "content": [{"type": "text/plain", "value": body}]
-    }
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    r = requests.post("https://api.sendgrid.com/v3/mail/send", headers=headers, json=payload, timeout=10)
-    r.raise_for_status()
-
-@app.route("/", methods=["GET"])
+@app.route('/')
 def home():
-    ip = get_client_ip(request)
-    ua = request.headers.get("User-Agent", "")
-    accept_lang = request.headers.get("Accept-Language", "")
-    geo = geolocate_ip(ip)
-    visitor = {
-        "ip": geo.get("ip", ip),
-        "country": geo.get("country"),
-        "region": geo.get("region"),
-        "city": geo.get("city"),
-        "zip": geo.get("zip"),
-        "lat": geo.get("lat"),
-        "lon": geo.get("lon"),
-        "isp": geo.get("isp"),
-        "org": geo.get("org"),
-        "user_agent": ua,
-        "accept_language": accept_lang
-    }
-    logging.info("visitor: %s", visitor)
-    subject = f"New visit from {visitor.get('ip')}"
-    body_lines = [f"{k}: {v}" for k, v in visitor.items()]
-    body = "\n".join(body_lines)
-    to_email = os.getenv("TO_EMAIL")
-    try:
-        if os.getenv("SENDGRID_API_KEY"):
-            send_via_sendgrid(to_email, subject, body)
-        elif os.getenv("EMAIL_ADDRESS") and os.getenv("EMAIL_PASSWORD"):
-            send_via_smtp(to_email, subject, body)
-        else:
-            logging.info("No email provider configured; skipping sending")
-    except Exception:
-        logging.exception("failed to send notification")
-    return jsonify({"status": "ok", "visitor": visitor})
+    ip = request.remote_addr
+    user_agent = request.headers.get('User-Agent', '')
+    lang = request.headers.get('Accept-Language', '')
+
+    return f"""
+    <h1>Welcome 👋</h1>
+    <p><strong>IP:</strong> {ip}</p>
+    <p><strong>User-Agent:</strong> {user_agent}</p>
+    <p><strong>Language:</strong> {lang}</p>
+    """
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
