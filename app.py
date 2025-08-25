@@ -1,5 +1,6 @@
 from flask import Flask, request, Response
-import datetime, requests
+import datetime
+import requests
 
 app = Flask(__name__)
 
@@ -9,7 +10,7 @@ PASSWORD = "2345"
 def home():
     ip = request.remote_addr
 
-    # نحاول نجيب الموقع الجغرافي من ip-api
+    # نحاول نجيب الموقع الجغرافي
     try:
         geo = requests.get(f"http://ip-api.com/json/{ip}").json()
         country = geo.get("country", "Unknown")
@@ -22,14 +23,14 @@ def home():
     time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     data = f"""
-    Time: {time}
-    IP Address: {ip}
-    Country: {country}
-    City: {city}
-    Device Info: {user_agent}
-    Language: {lang}
-    ----------------------------
-    """
+Time: {time}
+IP Address: {ip}
+Country: {country}
+City: {city}
+Device Info: {user_agent}
+Language: {lang}
+----------------------------
+"""
 
     # يطبع في Logs
     print(data)
@@ -38,8 +39,7 @@ def home():
     with open("visits.txt", "a", encoding="utf-8") as f:
         f.write(data)
 
-    return "<h1>Welcome</h1><p>Your visit has been recorded.</p>"
-
+    return "<h1>Welcome to APks.F</h1><p>Your visit has been recorded.</p>"
 
 @app.route('/visits')
 def show_visits():
@@ -54,7 +54,6 @@ def show_visits():
         content = "No visits recorded yet."
 
     return f"<pre>{content}</pre>"
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
