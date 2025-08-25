@@ -1,40 +1,60 @@
-from flask import Flask, request
-import os
+from flask import Flask, request, Response
+import datetime, requests
 
 app = Flask(__name__)
+
+PASSWORD = "2345"
 
 @app.route('/')
 def home():
     ip = request.remote_addr
+
+    # نحاول نجيب الموقع الجغرافي من ip-api
+    try:
+        geo = requests.get(f"http://ip-api.com/json/{ip}").json()
+        country = geo.get("country", "Unknown")
+        city = geo.get("city", "Unknown")
+    except:
+        country, city = "Unknown", "Unknown"
+
     user_agent = request.headers.get('User-Agent')
     lang = request.headers.get('Accept-Language')
+    time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     data = f"""
-    New visitor detected:
-
+    Time: {time}
     IP Address: {ip}
+    Country: {country}
+    City: {city}
     Device Info: {user_agent}
     Language: {lang}
-    -----------------------------
+    ----------------------------
     """
 
-    try:
-        with open("visits.txt", "a", encoding="utf-8") as f:
-            f.write(data + "\n")
-    except Exception as e:
-        print("Error saving visitor:", e)
+    # يطبع في Logs
+    print(data)
+
+    # يخزن في ملف
+    with open("visits.txt", "a", encoding="utf-8") as f:
+        f.write(data)
 
     return "<h1>Welcome</h1><p>Your visit has been recorded.</p>"
 
-# صفحة خاصة تعرض البيانات
-@app.route('/data')
-def show_data():
-    if os.path.exists("visits.txt"):
+
+@app.route('/visits')
+def show_visits():
+    password = request.args.get("password", "")
+    if password != PASSWORD:
+        return Response("Access Denied: Wrong Password", status=403)
+
+    try:
         with open("visits.txt", "r", encoding="utf-8") as f:
             content = f.read()
-        return f"<pre>{content}</pre>"
-    else:
-        return "<h1>No visits recorded yet.</h1>"
+    except FileNotFoundError:
+        content = "No visits recorded yet."
+
+    return f"<pre>{content}</pre>"
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
